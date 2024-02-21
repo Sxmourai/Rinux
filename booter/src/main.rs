@@ -1,6 +1,7 @@
 pub use booter::*;
 fn main() {
     let args = Args::parse();
+    cmd!(panic="Failed to compile kernel",dir="kernel","cargo b --target x86_64-unknown-none --bin kernel");
     let _ = std::fs::remove_file("target/raw.img"); // Don't unwrap because it's not mandatory to delete the file, + if the first time executing, raw.img doesn't exist
     cmd!(
         panic="Failed creating empty disk image",
@@ -33,9 +34,13 @@ fn main() {
         "mmd -i raw.img@@1M ::/EFI ::/EFI/BOOT",
     );
     cmd!(
+        dir=".",
+        "rm ./target/kernel",
+    );
+    cmd!(
         panic="Failed renaming rinux to kernel to boot from it in limine",
-        dir="target",
-        "mv ../kernel/target/x86_64-unknown-none/{}/kernel kernel",PROFILE.as_path(),
+        dir=".",
+        "mv kernel/target/x86_64-unknown-none/{}/kernel ./target/kernel",PROFILE.as_path(),
     );
     cmd!(
         panic="Failed copying files to FAT devices",
