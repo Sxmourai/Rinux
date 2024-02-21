@@ -80,12 +80,12 @@ impl FrameBufferWriter {
         logger
     }
 
-    fn newline(&mut self) {
+    pub fn newline(&mut self) {
         self.y_pos += font_constants::CHAR_RASTER_HEIGHT.val() + LINE_SPACING;
         self.carriage_return()
     }
 
-    fn carriage_return(&mut self) {
+    pub fn carriage_return(&mut self) {
         self.x_pos = BORDER_PADDING;
     }
 
@@ -106,7 +106,7 @@ impl FrameBufferWriter {
 
     /// Writes a single char to the framebuffer. Takes care of special control characters, such as
     /// newlines and carriage returns.
-    fn write_char(&mut self, c: char) {
+    pub fn write_char(&mut self, c: char) {
         match c {
             '\n' => self.newline(),
             '\r' => self.carriage_return(),
@@ -170,53 +170,3 @@ impl fmt::Write for FrameBufferWriter {
 }
 
 pub static mut WRITER: Option<FrameBufferWriter> = None;
-
-impl log::Log for FrameBufferWriter {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        todo!()
-    }
-
-    fn log(&self, record: &log::Record) {
-        let prefix = match record.level() {
-            log::Level::Error => "[ERROR]",
-            log::Level::Warn =>  "[Warn]",
-            log::Level::Info =>  "[Info]",
-            log::Level::Debug => "[Debug]",
-            log::Level::Trace => "[Trace]",
-        };
-        let mut_self = unsafe{very_bad_function(self)};
-        for b in record.args().as_str().unwrap().chars() {
-            mut_self.write_char(b as char);
-        }
-        mut_self.newline();
-    }
-
-    fn flush(&self) {
-        todo!()
-    }
-}
-/// https://stackoverflow.com/questions/54237610/is-there-a-way-to-make-an-immutable-reference-mutable
-#[allow(invalid_reference_casting)]
-unsafe fn very_bad_function<T>(reference: &T) -> &mut T {
-    let const_ptr = reference as *const T;
-    let mut_ptr = const_ptr as *mut T;
-    &mut *mut_ptr
-}
-// struct Logger;
-// unsafe impl defmt::Logger for Logger {
-//     fn acquire() {
-//         unsafe{WRITER.as_mut().unwrap().write()}.write_str("acquire");
-//     }
-//     unsafe fn flush() {
-//         WRITER.as_mut().unwrap().write().write_str("flush");
-//     }
-//     unsafe fn release() {
-//         WRITER.as_mut().unwrap().write().write_str("release");
-//     }
-//     unsafe fn write(bytes: &[u8]) {
-//         WRITER.as_mut().unwrap().write().write_str("write");
-//         for b in bytes {
-//             WRITER.as_mut().unwrap().write().write_char(*b as char);
-//         }
-//     }
-// }
