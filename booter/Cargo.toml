@@ -10,3 +10,5 @@ fscommon = "0.1.1"
 ovmf-prebuilt = "0.1.0-alpha.1"
 
 clap = { version = "4.5.1", features = ["derive"] }
+defmt = "0.3.6"
+log = "0.4.20"
