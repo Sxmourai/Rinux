@@ -10,18 +10,28 @@ use crate::framebuffer::{FrameBufferInfo, WRITER};
 /// by the Limine boot protocol specification. See specification for further info.
 static BASE_REVISION: limine::BaseRevision = limine::BaseRevision::new();
 
+extern crate alloc;
+
 mod framebuffer;
-mod log;
+mod logger;
+mod acpi;
+mod bit_manipulation;
+mod memory;
+
 #[no_mangle]
 unsafe extern "C" fn _start() -> ! {
     assert!(BASE_REVISION.is_supported());
-    log::init();
-
+    logger::init();
+    interrupts::init();
+    memory::init();
+    acpi::init();
     hcf();
 }
 
 #[panic_handler]
-fn rust_panic(_info: &core::panic::PanicInfo) -> ! {
+// #[track_caller]
+fn rust_panic(info: &core::panic::PanicInfo) -> ! {
+    unsafe{framebuffer::WRITER.as_mut().unwrap().write_str("PANIC")};
     hcf();
 }
 
