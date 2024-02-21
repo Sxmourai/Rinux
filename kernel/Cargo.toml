@@ -1,9 +1,13 @@
 cargo-features = ["per-package-target"]
 [package]
-name = "rinux"
+name = "kernel"
 version = "0.1.0"
 edition = "2021"
-forced-target = "x86_64-unknown-none"
+forced-target = "x86_64-unknown-none" # Useless cuz overriden in build script
 default-target = "x86_64-unknown-none"
 
 [dependencies]
+limine = "0.1.12"
+
+[[bin]]
+name = "kernel"

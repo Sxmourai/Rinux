@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "booter",
-    "kernel"
+    # "kernel"
 ]
+exclude = ["kernel"]
 
 resolver = "2"
