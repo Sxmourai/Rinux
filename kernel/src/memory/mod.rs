@@ -1,42 +1,27 @@
-pub mod allocator;
+//TODO: Implement proper paging & all
+//TODO: Make a "simple" function to map ANY frame to a new page. Need this to access rsdp pointer
+// https://os.phil-opp.com/paging-implementation/#using-offsetpagetable
 
-static MEM_BASE: KernelAddressRequest = KernelAddressRequest::new();
-
-/// Initialises Heap & Page mapper
-pub fn init() {
-    if let Some(mem_base) = MEM_BASE.get_response() {
-        let phys_offset = mem_base.physical_base();
-        let page_4 = unsafe{active_table(VirtAddr::new(phys_offset))};
-        
-        log::error!("Page 4");
-        let addresses = [
-            // the identity-mapped vga buffer page
-            0xb8000,
-            // some code page
-            0x201008,
-            // some stack page
-            0x0100_0020_1a10,
-            // virtual address mapped to physical address 0
-            phys_offset,
-        ];
-        for &address in &addresses {
-            let virt = VirtAddr::new(address);
-            let phys = unsafe { translate_addr(virt, VirtAddr::new(phys_offset)) };
-            // unsafe{crate::framebuffer::WRITER.as_mut().unwrap()}.write_fmt(format_args!("{:?} -> {:?}", virt, phys));
-        }
-    } else {
-        log::error!("Failed getting memory base")
-    }
-}
-
-
-
-use core::fmt::Write;
-
-use limine::request::KernelAddressRequest;
+use x86_64::structures::paging::PageTableFlags as Flags;
+use x86_64::structures::paging::PageTableFlags;
 use x86_64::{
-    structures::paging::PageTable, PhysAddr, VirtAddr
+    structures::paging::{
+        FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PhysFrame, Size4KiB,
+    },
+    PhysAddr, VirtAddr,
 };
+
+pub mod allocator;
+pub mod frame_allocator;
+pub mod handler;
+
+use self::handler::MemoryHandler;
+
+//TODO Make an allocator error handler
+// #[alloc_error_handler]
+// pub fn alloc_error(size: usize, align: usize) -> ! {
+
+// }
 
 /// Returns a mutable reference to the active level 4 table.
 ///
@@ -44,9 +29,7 @@ use x86_64::{
 /// complete physical memory is mapped to virtual memory at the passed
 /// `physical_memory_offset`. Also, this function must be only called once
 /// to avoid aliasing `&mut` references (which is undefined behavior).
-pub unsafe fn active_table(physical_memory_offset: VirtAddr)
-    -> &'static mut PageTable
-{
+unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
     use x86_64::registers::control::Cr3;
 
     let (level_4_table_frame, _) = Cr3::read();
@@ -55,38 +38,52 @@ pub unsafe fn active_table(physical_memory_offset: VirtAddr)
     let virt = physical_memory_offset + phys.as_u64();
     let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
 
-    &mut *page_table_ptr // unsafe
+    unsafe { &mut *page_table_ptr }
 }
 
+/// Initialize a new OffsetPageTable.
+///
+/// This function is unsafe because the caller must guarantee that the
+/// complete physical memory is mapped to virtual memory at the passed
+/// `physical_memory_offset`. Also, this function must be only called once
+/// to avoid aliasing `&mut` references (which is undefined behavior).
+// pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
+//     let level_4_table = active_level_4_table(physical_memory_offset);
+//     OffsetPageTable::new(level_4_table, physical_memory_offset)
+// }
 
-unsafe fn translate_addr(addr: VirtAddr, physical_memory_offset: VirtAddr) -> Option<PhysAddr> {
-    use x86_64::structures::paging::page_table::FrameError;
-    use x86_64::registers::control::Cr3;
+// end_page is using .containing address
+//TODO Map a page when a page fault occurs (in interrupts/exceptions.rs)
+pub fn read_phys_memory_and_map(location: u64, size: usize, end_page: u64) -> &'static [u8] {
+    let flags: PageTableFlags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE; // TODO Change this to a constant
 
-    // read the active level 4 frame from the CR3 register
-    let (level_4_table_frame, _) = Cr3::read();
+    let _size_64 = size as u64;
+    let start_frame_addr = PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(location))
+        .start_address()
+        .as_u64();
+    let mut offset = 0;
+    let mut mem_handler = unsafe { crate::mem_handler!() };
+    for i in (start_frame_addr..start_frame_addr + size as u64).step_by(4096) {
+        // Map all frames that might be used
+        let page: Page<Size4KiB> = Page::containing_address(VirtAddr::new(end_page + offset));
+        let phys_frame = PhysFrame::containing_address(PhysAddr::new(i));
 
-    let table_indexes = [
-        addr.p4_index(), addr.p3_index(), addr.p2_index(), addr.p1_index()
-    ];
-    let mut frame = level_4_table_frame;
+        // serial_println!("Physical frame_adress: {:X}\t-\tLocation: {:X}
+        // Computed location {:X}\t-\tFrame to page: {:X} (Provided (unaligned): {:X})
+        // Currently mapping: Physical({:X}-{:X})\t-\tVirtual({:X}-{:X})
+        // ", phys_frame.start_address().as_u64(), location, end_page, page.start_address().as_u64(),end_page, i,i+4096, end_page+offset, end_page+offset+4096);
 
-    // traverse the multi-level page table
-    for &index in &table_indexes {
-        // convert the frame into a page table reference
-        let virt = physical_memory_offset + frame.start_address().as_u64();
-        let table_ptr: *const PageTable = virt.as_ptr();
-        let table = unsafe {&*table_ptr};
-
-        // read the page table entry and update `frame`
-        let entry = &table[index];
-        frame = match entry.frame() {
-            Ok(frame) => frame,
-            Err(FrameError::FrameNotPresent) => return None,
-            Err(FrameError::HugeFrame) => panic!("huge pages not supported"),
-    };
-}
-
-// calculate the physical address by adding the page offset
-Some(frame.start_address() + u64::from(addr.page_offset()))
+        unsafe { mem_handler.map_frame(page, phys_frame, flags) }.unwrap();
+        offset += 4096;
+    }
+    // Reads the content from memory, should be safe
+    let end_page_start_addr = Page::<Size4KiB>::containing_address(VirtAddr::new(end_page))
+        .start_address()
+        .as_u64();
+    let phys_offset = location
+        - PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(location))
+            .start_address()
+            .as_u64();
+    let start_addr = phys_offset + end_page_start_addr;
+    unsafe { core::slice::from_raw_parts(start_addr as *const u8, size) }
 }

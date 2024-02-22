@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 #![cfg_attr(debug_assertions, allow(dead_code, unused))]
+#![feature(abi_x86_interrupt)] // For interrupts in src/interrupts/irq.rs i.e.
+#![feature(const_mut_refs)] // See src/memory/allocated/fixed_size...
 
 use core::{arch::asm, fmt::Write};
 
@@ -17,14 +19,26 @@ mod logger;
 mod acpi;
 mod bit_manipulation;
 mod memory;
+mod interrupts;
+mod gdt;
+mod ps2;
+mod task;
+mod boot_info;
 
 #[no_mangle]
 unsafe extern "C" fn _start() -> ! {
     assert!(BASE_REVISION.is_supported());
-    logger::init();
-    interrupts::init();
-    memory::init();
-    acpi::init();
+    crate::logger::init();
+    log::info!("Boot info !");
+    crate::boot_info::init();
+    log::info!("GDT");
+    crate::gdt::init();
+    log::info!("Interrupts");
+    crate::interrupts::init();
+    log::info!("Memory");
+    crate::memory::handler::init();
+    log::info!("ACPI");
+    crate::acpi::init();
     hcf();
 }
 
