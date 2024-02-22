@@ -10,9 +10,9 @@ pub fn init() {
         let info = FrameBufferInfo {
             width: framebuffer.width() as usize,
             height: framebuffer.height() as usize,
-            stride: framebuffer.pitch() as usize,
+            stride: framebuffer.width() as usize,
             pixel_format: framebuffer::PixelFormat::Rgb,
-            bytes_per_pixel: framebuffer.bpp().div_ceil(8) as usize,
+            bytes_per_pixel: (framebuffer.bpp()/8) as usize,
         };
         let mut writer = framebuffer::FrameBufferWriter::new(buffer, info);
         unsafe{WRITER.replace(writer)};
