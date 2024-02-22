@@ -24,6 +24,7 @@ mod gdt;
 mod ps2;
 mod task;
 mod boot_info;
+mod serial;
 
 #[no_mangle]
 unsafe extern "C" fn _start() -> ! {

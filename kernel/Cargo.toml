@@ -8,15 +8,21 @@ default-target = "x86_64-unknown-none"
 
 [dependencies]
 limine = "0.2.0"
-noto-sans-mono-bitmap = "0.2.0"
+
 spin = "0.9.8"
-log = { version = "0.4.20", default-features = false }
+
+noto-sans-mono-bitmap = "0.2.0"
 x86_64 = "*"
+log = { version = "0.4.20", default-features = false }
 lazy_static = {version="1.4.0", features = ["spin_no_std"]}
 raw-cpuid = "11.0.1"
 pic8259 = "0.10.4"
 pc-keyboard = "0.7.0"
 linked_list_allocator = "0.10.5"
+uart_16550 = "0.3.0"
 
 [[bin]]
 name = "kernel"
+
+[features]
+no_screen = []

@@ -1,7 +1,12 @@
 pub use booter::*;
+include!("args.rs");
 fn main() {
     let args = Args::parse();
-    cmd!(panic="Failed to compile kernel",dir="kernel","cargo b --target x86_64-unknown-none --bin kernel");
+    let mut build_command = "cargo b --target x86_64-unknown-none --bin kernel ".to_string();
+    if args.no_screen {
+        build_command.push_str("--features no_screen ")
+    }
+    cmd!(panic="Failed to compile kernel",dir="kernel", "{}", build_command);
     let _ = std::fs::remove_file("target/raw.img"); // Don't unwrap because it's not mandatory to delete the file, + if the first time executing, raw.img doesn't exist
     cmd!(
         panic="Failed creating empty disk image",
@@ -52,18 +57,16 @@ fn main() {
         dir="target",
         "mcopy -i raw.img@@1M limine/BOOTX64.EFI limine/BOOTIA32.EFI ::/EFI/BOOT",
     );
-    if args.bios {
-        cmd!("qemu-system-x86_64 -M q35 -m 2G -hda ");
-    } else { // !bios = uefi
-        cmd!("qemu-system-x86_64 -M q35 -m 2G -drive file=target/raw.img,format=raw -bios {}", ovmf_prebuilt::ovmf_pure_efi().to_string_lossy());
+    let mut qemu = "qemu-system-x86_64 -M q35 -m 2G -drive file=target/raw.img,format=raw -device isa-debug-exit,iobase=0xf4,iosize=0x04 ".to_string();
+    if args.no_screen {
+        qemu.push_str("-serial stdio ");
+    } else {
+        qemu.push_str("-serial stdio ");
+
     }
-}
-
-use clap::Parser;
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-pub struct Args {
-    #[arg(short, long)]
-    pub bios: bool,
-
+    if args.bios {
+        cmd!("{}", qemu);
+    } else { // !bios = uefi
+        cmd!("{}-bios {}", qemu, ovmf_prebuilt::ovmf_pure_efi().to_string_lossy());
+    }
 }

@@ -1,6 +1,5 @@
 pub mod command;
 pub use command::*;
-pub mod args;
 #[cfg(not(debug_assertions))]
 pub const PROFILE: Profile = Profile::Release;
 #[cfg(debug_assertions)]
