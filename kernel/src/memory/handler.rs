@@ -1,21 +1,40 @@
 use limine::response::MemoryMapResponse;
 use x86_64::{
     structures::paging::{
-        mapper::{MapperFlush, UnmapError},
-        FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB,
+        mapper::{MapToError, MapperFlush, UnmapError}, FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame, Size4KiB
     },
     PhysAddr, VirtAddr,
 };
 
 use log::trace;
 
-
 use crate::boot_info;
 
-use super::{active_level_4_table, frame_allocator::BootInfoFrameAllocator};
+use super::frame_allocator::BootInfoFrameAllocator;
+
+/// Returns a mutable reference to the active level 4 table.
+///
+/// This function is unsafe because the caller must guarantee that the
+/// complete physical memory is mapped to virtual memory at the passed
+/// `physical_memory_offset`. Also, this function must be only called once
+/// to avoid aliasing `&mut` references (which is undefined behavior).
+unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
+    use x86_64::registers::control::Cr3;
+
+    let (level_4_table_frame, _) = Cr3::read();
+
+    let phys = level_4_table_frame.start_address();
+    let virt = physical_memory_offset + phys.as_u64();
+    let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
+
+    unsafe { &mut *page_table_ptr }
+}
 
 pub fn init() {
-    let mem_handler = MemoryHandler::new(crate::boot_info!().phys_offset as u64, &boot_info!().memory_map);
+    let mem_handler = MemoryHandler::new(
+        crate::boot_info!().phys_offset as u64,
+        &boot_info!().memory_map,
+    );
     unsafe { crate::boot_info::MEM_HANDLER.replace(mem_handler) };
 }
 
@@ -30,7 +49,10 @@ impl MemoryHandler {
         let physical_memory_offset = VirtAddr::new(physical_memory_offset);
         // trace!("Getting active level 4 table");
         let level_4_table = unsafe { active_level_4_table(physical_memory_offset) };
-
+        // for table in level_4_table.iter() {
+        //     log::debug!("{:?}", (table.addr(), table.flags()))
+        // }
+        todo!();
         log::info!("off");
         let mapper = unsafe { OffsetPageTable::new(level_4_table, physical_memory_offset) };
         log::info!("aa");
@@ -40,8 +62,7 @@ impl MemoryHandler {
             frame_allocator,
         };
         log::info!("heap");
-        crate::memory::allocator::init_heap(&mut _self)
-            .expect("heap initialization failed"); // Initialize the heap allocator
+        crate::memory::allocator::init_heap(&mut _self).expect("heap initialization failed"); // Initialize the heap allocator
         log::info!("fu");
         _self
     }
@@ -51,13 +72,12 @@ impl MemoryHandler {
         &mut self,
         page: Page<Size4KiB>,
         flags: PageTableFlags,
-    ) -> Result<PhysAddr, MapFrameError> {
+    ) -> Result<PhysAddr, MapToError<Size4KiB>> {
         let frame = self.frame_allocator.allocate_frame();
         if frame.is_none() {
-            return Err(MapFrameError::CantAllocateFrame);
+            return Err(MapToError::FrameAllocationFailed);
         }
         let frame = frame.unwrap();
-        log::info!("map");
         unsafe { self.map_frame(page, frame, flags)? }
         Ok(frame.start_address())
     }
@@ -77,11 +97,10 @@ impl MemoryHandler {
         page: Page<Size4KiB>,
         frame: PhysFrame,
         flags: PageTableFlags,
-    ) -> Result<(), MapFrameError> {
+    ) -> Result<(), MapToError<Size4KiB>> {
         unsafe {
             self.mapper
-                .map_to(page, frame, flags, &mut self.frame_allocator)
-                .map_err(|err| MapFrameError::CantAllocateFrame)?
+                .map_to(page, frame, flags, &mut self.frame_allocator)?
                 .flush()
         }
         Ok(())
@@ -90,17 +109,19 @@ impl MemoryHandler {
         let frame = self.frame_allocator.allocate_frame()?;
         let virt_addr = VirtAddr::new(frame.start_address().as_u64());
         let page = Page::from_start_address(virt_addr).ok()?;
-        unsafe{self.map_frame(page, frame, flags)}.ok()?;
+        unsafe { self.map_frame(page, frame, flags) }.ok()?;
         Some(virt_addr)
     }
-
 }
 ///TODO Is it unsafe ?
+#[track_caller]
 pub fn map(page: Page<Size4KiB>, flags: PageTableFlags) -> PhysAddr {
-    unsafe { crate::mem_handler!().map(page, flags) }.unwrap()
+    unsafe { crate::mem_handler!().map(page, flags) }.expect("Failed mapping mandatory page")
 }
+#[track_caller]
 pub fn map_frame(page: Page<Size4KiB>, frame: PhysFrame, flags: PageTableFlags) {
-    unsafe { crate::mem_handler!().map_frame(page, frame, flags) }.unwrap()
+    unsafe { crate::mem_handler!().map_frame(page, frame, flags) }
+        .expect("Failed mapping mandatory page/frame")
 }
 #[macro_export]
 macro_rules! mem_map {

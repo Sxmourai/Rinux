@@ -38,7 +38,7 @@ unsafe extern "C" fn _start() -> ! {
     log::info!("Interrupts");
     crate::interrupts::init();
     log::info!("Memory");
-    crate::memory::handler::init();
+    crate::memory::init();
     log::info!("ACPI");
     crate::acpi::init();
     hcf();

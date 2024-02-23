@@ -128,10 +128,10 @@ pub extern "x86-interrupt" fn page_fault_handler(
         error_code, // For more infos on error codes: https://wiki.osdev.org/Exceptions#Error_code
         stack_frame
     );
-    if error_code.bits() & 1 == 0 { // page not present
-    } else {
-        map(Page::containing_address(Cr2::read()), flags);
-    }
+    map(Page::containing_address(Cr2::read()), flags);
+    // if error_code.bits() & 1 == 0 { // page not present
+    // } else {
+    // }
 }
 
 // pub fn map_phys_memory(location: u64, size: usize, end_page:u64) -> &'static [u8] {
