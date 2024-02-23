@@ -1,3 +1,5 @@
+use core::fmt::Write;
+
 use crate::framebuffer::{self, FrameBufferInfo, FrameBufferWriter, WRITER};
 
 static FRAMEBUFFER_REQUEST: limine::request::FramebufferRequest = limine::request::FramebufferRequest::new();
@@ -29,17 +31,25 @@ impl log::Log for FrameBufferWriter {
 
     fn log(&self, record: &log::Record) {
         let prefix = match record.level() {
-            log::Level::Error => "[ERROR]",
-            log::Level::Warn =>  "[Warn]",
-            log::Level::Info =>  "[Info]",
-            log::Level::Debug => "[Debug]",
-            log::Level::Trace => "[Trace]",
+            log::Level::Error => "ERROR",
+            log::Level::Warn =>  "Warn",
+            log::Level::Info =>  "Info",
+            log::Level::Debug => "Debug",
+            log::Level::Trace => "Trace",
         };
         let mut_self = unsafe{very_bad_function(self)};
-        for b in record.args().as_str().unwrap().chars() {
-            mut_self.write_char(b as char);
-        }
+        let file = record.file_static().unwrap();
+        let line = record.line().unwrap();
+        let msg = record.args();
+        write!(mut_self, "[{prefix}][{file}:{line}]: {msg}");
         mut_self.newline();
+        // if let Some(args) = record.file() {
+        //     for b in args.chars() {
+        //         mut_self.write_char(b as char);
+        //     }
+        // } else {
+        //     let _ = mut_self.write_str("Error trying to log !"); // What to do if it fails ? For now it's our only way to send data to user
+        // }
     }
 
     fn flush(&self) {

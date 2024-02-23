@@ -57,7 +57,7 @@ fn main() {
         dir="target",
         "mcopy -i raw.img@@1M limine/BOOTX64.EFI limine/BOOTIA32.EFI ::/EFI/BOOT",
     );
-    let mut qemu = "qemu-system-x86_64 -M q35 -m 2G -drive file=target/raw.img,format=raw -device isa-debug-exit,iobase=0xf4,iosize=0x04 ".to_string();
+    let mut qemu = "qemu-system-x86_64 -drive file=target/raw.img,format=raw -device isa-debug-exit,iobase=0xf4,iosize=0x04 ".to_string();
     if args.no_screen {
         qemu.push_str("-serial stdio ");
     } else {
