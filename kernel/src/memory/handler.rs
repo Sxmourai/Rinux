@@ -31,16 +31,18 @@ impl MemoryHandler {
         // trace!("Getting active level 4 table");
         let level_4_table = unsafe { active_level_4_table(physical_memory_offset) };
 
+        log::info!("off");
         let mapper = unsafe { OffsetPageTable::new(level_4_table, physical_memory_offset) };
+        log::info!("aa");
         let frame_allocator = unsafe { BootInfoFrameAllocator::init() };
         let mut _self = Self {
             mapper,
             frame_allocator,
         };
+        log::info!("heap");
         crate::memory::allocator::init_heap(&mut _self)
             .expect("heap initialization failed"); // Initialize the heap allocator
         log::info!("fu");
-        trace!("Finished initializing heap, can now begin tracing !");
         _self
     }
     /// # Safety

@@ -3,6 +3,7 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused))]
 #![feature(abi_x86_interrupt)] // For interrupts in src/interrupts/irq.rs i.e.
 #![feature(const_mut_refs)] // See src/memory/allocated/fixed_size...
+#![feature(panic_info_message)] // See down in panic handler
 
 use core::{arch::asm, fmt::Write};
 
@@ -14,17 +15,17 @@ static BASE_REVISION: limine::BaseRevision = limine::BaseRevision::new();
 
 extern crate alloc;
 
-mod framebuffer;
-mod logger;
 mod acpi;
 mod bit_manipulation;
-mod memory;
-mod interrupts;
-mod gdt;
-mod ps2;
-mod task;
 mod boot_info;
+mod framebuffer;
+mod gdt;
+mod interrupts;
+mod logger;
+mod memory;
+mod ps2;
 mod serial;
+mod task;
 
 #[no_mangle]
 unsafe extern "C" fn _start() -> ! {
@@ -45,8 +46,21 @@ unsafe extern "C" fn _start() -> ! {
 
 #[panic_handler]
 // #[track_caller]
-fn rust_panic(info: &core::panic::PanicInfo) -> ! {
-    unsafe{framebuffer::WRITER.as_mut().unwrap().write_str("PANIC")};
+fn rust_panic(panic_info: &core::panic::PanicInfo) -> ! {
+    
+    if let Some(info) = panic_info.payload().downcast_ref::<&str>() {
+        writeln!(
+            unsafe { framebuffer::WRITER.as_mut().unwrap() },
+            "panic occurred: {:?}",
+            (info, panic_info.location(), panic_info.message())
+        );
+    } else {
+        writeln!(
+            unsafe { framebuffer::WRITER.as_mut().unwrap() },
+            "panic occurred {:?}", (panic_info.location(), panic_info.message())
+        );
+    }
+    // write!(unsafe { framebuffer::WRITER.as_mut().unwrap() }, "PANIC {}", info.);
     hcf();
 }
 

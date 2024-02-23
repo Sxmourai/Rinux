@@ -16,7 +16,7 @@ fn main() {
     cmd!(
         panic="Failed creating MBR on disk image",
         dir="target",
-        "sgdisk raw.img -n 1:2048 -t 1:ef00",
+        "sgdisk raw.img -n 1:2048 -t 1:ef00", // Seems slow, let's use something else ?
     );
     // cmd!(
     //     panic="Failed creating main partition",
